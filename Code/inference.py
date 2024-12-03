@@ -17,8 +17,8 @@ transform_inference = transforms.Compose(
 )
 
 # Function to load the model
-def load_model(filepath, model):
-    checkpoint = torch.load(filepath, map_location=torch.device("cpu"), weights_only=False)  # Load to CPU or GPU
+def load_model(filepath, model, device):
+    checkpoint = torch.load(filepath, map_location=device, weights_only=False)  # Load to CPU or GPU
     model.load_state_dict(checkpoint["model"])
     return model, checkpoint["epoch"], checkpoint["trainstats"]
 
@@ -56,11 +56,11 @@ def organize_images(model, input_folder, output_folder, class_names):
 
 def main(model_full_name):
     # Hardcoded paths
-    # input_folder = "inference/images_to_classify"  
-    input_folder = "/data/horse/ws/knoll-traffic_sign_reproduction/atsds_large/inference/images_to_classify" 
+    input_folder = "inference/images_to_classify"  
+    # input_folder = "/data/horse/ws/knoll-traffic_sign_reproduction/atsds_large/inference/images_to_classify" 
 
-    # output_folder = "inference/classified_images"  
-    output_folder = "/data/horse/ws/knoll-traffic_sign_reproduction/atsds_large/inference/classified_images"  
+    output_folder = "inference/classified_images"  
+    # output_folder = "/data/horse/ws/knoll-traffic_sign_reproduction/atsds_large/inference/classified_images"  
     
 
 
@@ -75,7 +75,7 @@ def main(model_full_name):
     model = get_model(model_name=model_name, n_classes=len(class_names)).to(device)
 
     # Load model weights
-    model, epoch, trainstats = load_model(filepath, model)
+    model, epoch, trainstats = load_model(filepath, model, device)
     model.eval()  # Set model to evaluation mode
     print(f"Loaded model: {model_name} | Epoch: {epoch}")
 

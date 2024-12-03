@@ -33,7 +33,8 @@ transform_test = transforms.Compose(
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
         
-DATASET_PATH = "/data/horse/ws/juul507e-ju_streetsigns/data/"
+# DATASET_PATH = "/data/horse/ws/juul507e-ju_streetsigns/data/"
+DATASET_PATH = "data/"
 
 CHECKPOINT_PATH = "model/"
 
@@ -87,6 +88,11 @@ def test_model(model, testloader,criterion):
     return correct.cpu().numpy(), correct_top5.cpu().numpy(), total.cpu().numpy(), test_loss
     
 def save_model(model,optimizer,scheduler,trainstats,epoch,filepath="model/current/model.tar"):
+    
+    directory = os.path.dirname(filepath)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
     torch.save({'model':model.state_dict(),
                 'optimizer':optimizer.state_dict(),
                 'scheduler':scheduler.state_dict(),
