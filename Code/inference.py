@@ -6,6 +6,9 @@ from model import get_model
 import shutil
 import argparse
 
+# Personal debug module (`pip install ipydex`)
+from ipydex import IPS
+
 # Transformation for inference images
 transform_inference = transforms.Compose(
     [
@@ -49,19 +52,18 @@ def organize_images(model, input_folder, output_folder, class_names):
             file_path = os.path.join(input_folder, filename)
             predicted_class = predict_image(model, file_path, class_names)
             dest_folder = os.path.join(output_folder, predicted_class)
-            shutil.copy(file_path, os.path.join(dest_folder, filename))  
+            shutil.copy(file_path, os.path.join(dest_folder, filename))
             print(f"Copied {filename} to {dest_folder}")
 
 
+def main(model_full_name, data_base_path=None):
 
-def main(model_full_name):
-    # Hardcoded paths
-    input_folder = "inference/images_to_classify"  
-    # input_folder = "/data/horse/ws/knoll-traffic_sign_reproduction/atsds_large/inference/images_to_classify" 
+    if data_base_path is None:
+        # Hardcoded path for HPC
+        data_base_path = "/data/horse/ws/knoll-traffic_sign_reproduction/atsds_large"
 
-    output_folder = "inference/classified_images"  
-    # output_folder = "/data/horse/ws/knoll-traffic_sign_reproduction/atsds_large/inference/classified_images"  
-    
+    input_folder = os.path.join(data_base_path, "inference/images_to_classify")
+    output_folder = os.path.join(data_base_path, "inference/classified_images")
 
 
     # Derive model path and model name
@@ -85,7 +87,8 @@ def main(model_full_name):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_full_name", type=str, required=True, help="Full model name (e.g., simple_cnn_1_1)")
+    parser.add_argument("--model_full_name", "-m", type=str, required=True, help="Full model name (e.g., simple_cnn_1_1)")
+    parser.add_argument("--data_base_path", "-d", type=str, help="data path", default=None)
     args = parser.parse_args()
 
     # Check device
@@ -93,4 +96,4 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     # Run the main function
-    main(args.model_full_name)
+    main(model_full_name=args.model_full_name, data_base_path=args.data_base_path)
