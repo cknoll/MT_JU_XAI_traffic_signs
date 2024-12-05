@@ -11,6 +11,5 @@ This repo contains code based on the master thesis "Evaluation of XAI-Algorithms
 Local usage:
 - `python inference.py py3 --model_full_name simple_cnn_1_1 -d ./`
 
-
 Usage with mounted group drive and json-mode (see `--help`) :
-- `python inference.py --model_full_name simple_cnn_1_1 -d /home/ck/mnt/XAI-DIA-gl/Julian/Dataset_Masterarbeit/atsds_large -m json`
+- `python inference.py --model_full_name simple_cnn_1_1 -cp /home/ck/mnt/XAI-DIA-gl/Julian/Dataset_Masterarbeit/model_checkpoints -d /home/ck/mnt/XAI-DIA-gl/Julian/Dataset_Masterarbeit/atsds_large -m json`

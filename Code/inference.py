@@ -25,10 +25,11 @@ class InferenceManager:
     Class to bundle inference functionality.
     """
 
-    def __init__(self, model_full_name: str, data_base_path: str, mode: str):
+    def __init__(self, model_full_name: str, data_base_path: str, model_cp_base_path: str, mode: str):
 
         self.model_full_name = model_full_name
         self.data_base_path = data_base_path
+        self.model_cp_base_path = model_cp_base_path
         self.mode = mode
 
         self.class_names = [f"{i:05d}" for i in range(1, 20)]  # e.g., 00001 to 00019
@@ -65,7 +66,8 @@ class InferenceManager:
     def load_model_and_weights(self):
 
         # Derive model path and model name
-        model_fpath = "model/" + self.model_full_name + ".tar"
+        model_fname = f"{self.model_full_name}.tar"
+        model_fpath = pjoin(self.model_cp_base_path, model_fname)
         model_name = "_".join(self.model_full_name.split("_")[:-2])  # Extract model_name
 
         # load model architecture
@@ -180,13 +182,22 @@ def to_list(tensor):
     return res2
 
 
-def main(model_full_name, data_base_path=None, mode="copy"):
+def main(model_full_name, data_base_path=None, model_cp_base_path=None, mode="copy"):
 
     if data_base_path is None:
         # Hardcoded path for HPC
         data_base_path = "/data/horse/ws/knoll-traffic_sign_reproduction/atsds_large"
 
-    im = InferenceManager(model_full_name=model_full_name, data_base_path=data_base_path, mode=mode)
+    if model_cp_base_path is None:
+        # use local directory
+        model_cp_base_path = "model"
+
+    im = InferenceManager(
+        model_full_name=model_full_name,
+        data_base_path=data_base_path,
+        model_cp_base_path=model_cp_base_path,
+        mode=mode,
+    )
     im.run()
 
 
@@ -197,6 +208,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model_full_name", "-n", type=str, required=True, help="Full model name (e.g., simple_cnn_1_1)"
     )
+    parser.add_argument("--model_cp_base_path", "-cp", type=str, help="directory of model checkpoints", default=None)
     parser.add_argument("--data_base_path", "-d", type=str, help="data path", default=None)
     parser.add_argument(
         "--mode",
@@ -210,5 +222,9 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # Run the main function
-    main(model_full_name=args.model_full_name, data_base_path=args.data_base_path, mode=args.mode)
+    main(
+        model_full_name=args.model_full_name,
+        data_base_path=args.data_base_path,
+        model_cp_base_path=args.model_cp_base_path,
+        mode=args.mode,
+    )
