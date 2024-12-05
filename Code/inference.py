@@ -32,6 +32,7 @@ class InferenceManager:
         self.model_cp_base_path = model_cp_base_path
         self.mode = mode
 
+        # use simple enumeration here (might be overwritten with directory names later)
         self.class_names = [f"{i:05d}" for i in range(1, 20)]  # e.g., 00001 to 00019
 
         # Transformation for inference images
@@ -99,13 +100,18 @@ class InferenceManager:
         else:
             return class_names[predicted.item()]
 
-    def get_image_paths(self, base_path, sub_path="test"):
+    def get_image_paths(self, sub_path="test"):
         """
         return a list of absolute paths of all images e.g. from train/ or test/
+
+        also: set self.class_names to appropriate directory names
         """
 
-        host_path = pjoin(base_path, sub_path)
+        host_path = pjoin(self.data_base_path, sub_path)
         class_dirs = glob.glob(pjoin(host_path, "*"))
+        assert len(class_dirs) == len(self.class_names)
+        dir_name_start_idx = len(host_path) + 1
+        self.class_names = [path[dir_name_start_idx:] for path in class_dirs]
 
         all_paths = []
 
@@ -141,7 +147,7 @@ class InferenceManager:
 
     def classify_with_json_result(self):
 
-        all_img_paths = self.get_image_paths(self.data_base_path)
+        all_img_paths = self.get_image_paths()
 
         random.shuffle(all_img_paths)
 
