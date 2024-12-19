@@ -1,6 +1,5 @@
 import os
 import shutil
-import argparse
 import glob
 import json
 import random
@@ -14,6 +13,7 @@ from torchvision import transforms
 from ipydex import IPS
 
 from model import get_model
+import utils
 
 
 # shortcut
@@ -209,13 +209,7 @@ def main(model_full_name, data_base_path=None, model_cp_base_path=None, mode="co
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser()
-    # for every argument we also have a short form
-    parser.add_argument(
-        "--model_full_name", "-n", type=str, required=True, help="Full model name (e.g., simple_cnn_1_1)"
-    )
-    parser.add_argument("--model_cp_base_path", "-cp", type=str, help="directory of model checkpoints", default=None)
-    parser.add_argument("--data_base_path", "-d", type=str, help="data path", default=None)
+    parser = utils.get_default_arg_parser()
     parser.add_argument(
         "--mode",
         "-m",
