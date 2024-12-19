@@ -1,3 +1,5 @@
+import argparse
+
 import numpy as np
 import cv2
 from PIL import Image
@@ -27,7 +29,7 @@ def get_percentage_of_image(image,mask,percentage, fill_value = 0.0):
     masked_image = np.zeros_like(image)
     n = mask.size
     sortedvalues = np.sort(mask.flatten('K'))[::-1]
-    
+
     index = int(n/100*percentage)
     index_2 = n//100*percentage
     cutoff = sortedvalues[index]
@@ -42,7 +44,7 @@ def get_percentage_of_image_1d(image,mask,percentage, fill_value = 0.0):
     masked_image = np.zeros_like(image)
     n = mask.size
     sortedvalues = np.sort(mask.flatten('K'))[::-1]
-    
+
     index = int(n/100*percentage)
     index_2 = n//100*percentage
     cutoff = sortedvalues[index]
@@ -60,4 +62,13 @@ def get_input_tensors(image):
 def get_contained_part(mask1,mask2):
     mask1,mask2 = normalize_image(mask1),normalize_image(mask2)
     return np.array((mask1 == 1.0) & (mask2 == 1.0))
-    
+
+def get_default_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    # for every argument we also have a short form
+    parser.add_argument(
+        "--model_full_name", "-n", type=str, required=True, help="Full model name (e.g., simple_cnn_1_1)"
+    )
+    parser.add_argument("--model_cp_base_path", "-cp", type=str, help="directory of model checkpoints", default=None)
+    parser.add_argument("--data_base_path", "-d", type=str, help="data path", default=None)
+    return parser
