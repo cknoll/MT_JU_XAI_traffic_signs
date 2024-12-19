@@ -30,6 +30,15 @@ import torch.optim as optim
 from ATSDS import ATSDS
 from gradcam import get_gradcam
 from model import get_model
+import utils
+
+
+try:
+    # some optional debugging helpers
+    from ipydex import IPS, activate_ips_on_exception
+    activate_ips_on_exception()
+except ImportError:
+    pass
 
 
 transform_test_crop = transforms.Compose(
@@ -94,9 +103,7 @@ def get_input_tensors(image):
 
 def main():
 
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model_full_name", type=str, required=True, help="Full model name (e.g., simple_cnn_1_1)")
+    parser = utils.get_default_arg_parser()
     args = parser.parse_args()
 
 
@@ -107,7 +114,12 @@ def main():
     model_cpt = args.model_full_name + ".tar"
 
     # DATASET_PATH = "data"
-    DATASET_PATH = "/data/horse/ws/knoll-traffic_sign_reproduction"
+    if args.data_base_path is None:
+        # if argument is not passed: use hardcoded default
+        DATASET_PATH = "/data/horse/ws/knoll-traffic_sign_reproduction"
+    else:
+        DATASET_PATH = args.data_base_path
+
     dataset_type = "atsds_large"
     dataset_split = "test"
 
@@ -164,7 +176,8 @@ def main():
     plt.legend()
 
     # IMAGES_PATH = 'data/' + dataset_type + '/' + dataset_split + '/'
-    IMAGES_PATH = '/data/horse/ws/knoll-traffic_sign_reproduction/' + dataset_type + '/' + dataset_split + '/'
+    # IMAGES_PATH = '/data/horse/ws/knoll-traffic_sign_reproduction/' + dataset_type + '/' + dataset_split + '/'
+    IMAGES_PATH = os.path.join(DATASET_PATH, dataset_type, dataset_split)
 
     # Define our Categories
     CATEGORIES = sorted(os.listdir(IMAGES_PATH))
@@ -178,7 +191,7 @@ def main():
     imagedict = {}
     for cat in CATEGORIES:
         imagedict[cat] = []
-        imagelist = os.listdir(IMAGES_PATH + cat + "/")
+        imagelist = os.listdir(os.path.join(IMAGES_PATH, cat))
         for im in imagelist:
             imagedict[cat].append(im)
     output_types = ["mask","mask_on_image"]
@@ -210,7 +223,8 @@ def main():
     # IMAGES_PATH = 'data/' + dataset_type + '/' + dataset_split + '/'
     IMAGES_SUFFIX = '.png'
     # output_path = 'data/auswertung/' + model_name + "/" + "gradcam/" + dataset_split + "/"
-    output_path = '/data/horse/ws/knoll-traffic_sign_reproduction/auswertung/' + model_name + "/" + "gradcam/" + dataset_split + "/"
+    # output_path = '/data/horse/ws/knoll-traffic_sign_reproduction/auswertung/' + model_name + "/" + "gradcam/" + dataset_split + "/"
+    output_path = os.path.join(DATASET_PATH, model_name, "gradcam/", dataset_split)
 
 
     # This creates the needed folders inside. As mentioned above the Folder defined in output_path has to already exist
@@ -221,15 +235,14 @@ def main():
 
     for cat in CATEGORIES:
         for outputs in output_types:
-            if not os.path.isdir(output_path + cat + "/" + outputs):
-                os.makedirs(output_path + cat + "/" + outputs)
-
+            os.makedirs(os.path.join(output_path, cat, outputs), exist_ok=True)
 
     for cat in class_to_dataset_class_dict:
         model.eval()
         images = imagedict[cat]
         for imagename in images:
-            with open(os.path.abspath(IMAGES_PATH + cat + "/" + imagename), 'rb') as f:
+            fpath = os.path.abspath(os.path.join(IMAGES_PATH, cat, imagename))
+            with open(fpath, 'rb') as f:
                 with Image.open(f) as current_image:
                     current_image_tensor = get_input_tensors(current_image)
                     #print(imagename, class_to_dataset_class_dict[image_class])
@@ -239,10 +252,10 @@ def main():
                 original_mask, _ = get_gradcam(model,GRADCAM_TARGET_LAYER,current_image_tensor,label_idx_dict[class_to_dataset_class_dict[cat]],shape)
                 image = np.copy(current_image)
                 mask = np.copy(original_mask)
-                np.save(output_path + cat +  "/mask/" + imagename, mask)
+                np.save(os.path.join(output_path, cat, "mask", imagename), mask)
                 overlay_image = (mask_on_image(normalize_image(mask),normalize_image(image),alpha=0.3)*255).astype(np.uint8)
                 save_overlay_image = Image.fromarray(overlay_image)
-                save_overlay_image.save(output_path + cat + "/mask_on_image/" + imagename, "PNG")
+                save_overlay_image.save(os.path.join(output_path, cat, "mask_on_image", imagename), "PNG")
 
 if __name__ == "__main__":
     main()
