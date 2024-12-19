@@ -1,32 +1,35 @@
-
-from ATSDS import ATSDS
-import matplotlib.pyplot as plt
-import torch
-from torchvision import transforms as transforms
 ## Standard libraries
 import os
 import json
 import math
 import random
+import argparse
+
+
+# 3rd party libraries
 import numpy as np
+import matplotlib.pyplot as plt
+from PIL import Image
+import cv2
+
 os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 CUDA_LAUNCH_BLOCKING=1
 
 ## PyTorch
 import torch
+from torchvision import transforms as transforms
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data as data
 import torch.optim as optim
 
-import argparse
-import cv2
 
-import matplotlib.image
-from PIL import Image
+# our own modules
 
 # Import Gradcam - Check the gradcam.py for the code.
+from ATSDS import ATSDS
 from gradcam import get_gradcam
+from model import get_model
 
 
 transform_test_crop = transforms.Compose(
@@ -48,9 +51,6 @@ def load_model(model,optimizer,scheduler,filepath):
     optimizer.load_state_dict(cpt['optimizer'])
     scheduler.load_state_dict(cpt['scheduler'])
     return cpt['epoch'], cpt['trainstats']
-
-
-from model import get_model
 
 
 # Returns the Image with the Mask as overlay.
@@ -123,7 +123,7 @@ def main():
     random.seed(RANDOM_SEED)
     np.random.seed(RANDOM_SEED)
 
-    # Used for reproducability to fix randomness in some GPU calculations
+    # Used for reproducbility to fix randomness in some GPU calculations
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     device = torch.device("cpu") if not torch.cuda.is_available() else torch.device("cuda:0")
