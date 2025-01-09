@@ -1,5 +1,5 @@
 import argparse
-
+import os
 import numpy as np
 import cv2
 from PIL import Image
@@ -72,3 +72,56 @@ def get_default_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model_cp_base_path", "-cp", type=str, help="directory of model checkpoints", default=None)
     parser.add_argument("--data_base_path", "-d", type=str, help="data path", default=None)
     return parser
+
+def generate_adversarial_examples(
+    adv_folder,
+    pct_range,
+    categories,
+    imagedict,
+    img_path,
+    background_dir,
+    xai_dir,
+    mask_condition
+):
+    """
+    Generate adversarial examples based on the given mask condition.
+
+    """
+    for pct in pct_range:
+        print(f"Processing percentage: {pct}%")
+        for category in categories:
+            output_dir = os.path.join(adv_folder, str(pct), "test", category)
+            os.makedirs(output_dir, exist_ok=True)
+
+            images = imagedict[category]
+            for imagename in images:
+                # Load original image and background
+                current_img = normalize_image(np.array(Image.open(os.path.join(img_path, category, imagename))))
+                current_background = normalize_image(np.array(Image.open(os.path.join(background_dir, category, imagename))))
+
+                # Load and process XAI mask
+                xai_mask = np.load(os.path.join(xai_dir, category, "mask", f"{imagename}.npy"))
+                adv_mask = normalize_image(get_percentage_of_image(np.ones_like(current_img), xai_mask, pct / 10))
+
+                # Create adversarial example using the mask condition
+                adv_example = np.where(mask_condition(adv_mask), current_img, current_background)
+                adv_example_save = Image.fromarray((adv_example * 255).astype('uint8'))
+
+                # Save adversarial example
+                adv_example_save.save(os.path.join(output_dir, imagename))
+
+
+def create_image_dict(DATASET, DATASET_SPLIT):
+    IMAGES_PATH = os.path.join('data', DATASET, DATASET_SPLIT)
+    
+    # Define our Categories
+    CATEGORIES = sorted(os.listdir(IMAGES_PATH))
+
+    imagedict = {}
+    for cat in CATEGORIES:
+        imagedict[cat] = []
+        imagelist = os.listdir(os.path.join(IMAGES_PATH, cat))
+        for im in imagelist:
+            imagedict[cat].append(im)
+    
+    return CATEGORIES, imagedict

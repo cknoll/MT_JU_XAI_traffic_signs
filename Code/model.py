@@ -76,8 +76,62 @@ def get_model(model_name, n_classes):
         return SimpleCNN(n_classes)
     if(model_name == "advanced_cnn"):
         return ImprovedCNN(n_classes)  
-        
-        
+
+def load_model(model,optimizer,scheduler,filepath):
+    cpt = torch.load(filepath, map_location=torch.device('cpu'), weights_only=False)
+    model.load_state_dict(cpt['model'])
+    optimizer.load_state_dict(cpt['optimizer'])
+    scheduler.load_state_dict(cpt['scheduler'])
+    return cpt['epoch'], cpt['trainstats']
+
+def test_model(model, testloader,criterion, device, debug_prints=False):
+    model.eval()
+    num_classes = len(testloader.dataset.get_classes())
+    correct = torch.zeros(num_classes, dtype=torch.int64, device=device)
+    correct_top5 = torch.zeros(num_classes, dtype=torch.int64, device=device)
+    total = torch.zeros(num_classes, dtype=torch.int64, device=device)
+    softmaxes = torch.zeros(num_classes, dtype=torch.float, device=device)
+    scores = torch.zeros(num_classes, dtype=torch.float, device=device)
+    test_loss = 0.0
+
+    with torch.no_grad():
+        for images, labels in testloader:
+            images, labels = images.to(device), labels.to(device)  # Move images and labels to the GPU
+            outputs = model(images)
+            softmax =  F.softmax(outputs, dim=1)
+            loss = criterion(outputs, labels)  # Calculate the loss
+            test_loss += loss.item()  # Accumulate the loss
+
+            _, predicted = torch.max(outputs, 1)
+            _, predicted_top5 = torch.topk(outputs, 5, 1)
+
+
+            for i in range(len(predicted)):
+                correct[labels[i]] += (predicted[i] == labels[i])
+                correct_top5[labels[i]] += (labels[i] in predicted_top5[i])
+                total[labels[i]] += 1
+                softmaxes[labels[i]] += softmax[i][labels[i]]
+                scores[labels[i]] += outputs[i][labels[i]]
+
+
+    accuracy_per_class = (correct.float() / total.float())
+    top5_accuracy_per_class = (correct_top5.float() / total.float())
+    test_loss /= len(testloader)  # Calculate the average test loss
+
+    if debug_prints:
+        print(f'Test Total Accuracy: {accuracy_per_class.mean():.2%}')
+        print(f'Test Total Top-5 Accuracy: {top5_accuracy_per_class.mean():.2%}')
+
+        for i in range(num_classes):
+            print(f'Class {i} Test Accuracy: {accuracy_per_class[i]:.2%}')
+            print(f'Class {i} Test Top-5 Accuracy: {top5_accuracy_per_class[i]:.2%}')
+
+    model.train()  # Set the model back to training mode
+
+    return correct.cpu().numpy(), correct_top5.cpu().numpy(), total.cpu().numpy(), test_loss, softmaxes.cpu().numpy(),scores.cpu().numpy()
+
+
+                
         
 # Define the CNN model
 class SimpleCNN(nn.Module):
