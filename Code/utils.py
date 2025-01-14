@@ -1,8 +1,12 @@
 import argparse
 import os
+from PIL import Image
+from types import SimpleNamespace  # used as flexible Container Class
+
 import numpy as np
 import cv2
-from PIL import Image
+
+from dotenv import load_dotenv
 
 
 # Returns the Image with the Mask as overlay.
@@ -113,7 +117,7 @@ def generate_adversarial_examples(
 
 def create_image_dict(DATASET, DATASET_SPLIT):
     IMAGES_PATH = os.path.join('data', DATASET, DATASET_SPLIT)
-    
+
     # Define our Categories
     CATEGORIES = sorted(os.listdir(IMAGES_PATH))
 
@@ -123,5 +127,25 @@ def create_image_dict(DATASET, DATASET_SPLIT):
         imagelist = os.listdir(os.path.join(IMAGES_PATH, cat))
         for im in imagelist:
             imagedict[cat].append(im)
-    
+
     return CATEGORIES, imagedict
+
+
+def read_conf_from_dotenv() -> SimpleNamespace:
+    assert os.path.isfile(".env")
+    load_dotenv()
+
+    conf = SimpleNamespace()
+    conf.BASE_DIR = os.getenv("BASE_DIR")
+
+    assert conf.BASE_DIR is not None
+    return conf
+
+
+def get_dir_path(*parts, check_exists=True):
+    path = os.path.join(*parts)
+
+    if check_exists and not os.path.isdir(path):
+        msg = f"Path {path} unexpectedly is not a directory"
+        raise FileNotFoundError(msg)
+    return path

@@ -4,6 +4,24 @@ This repo contains code based on the master thesis "Evaluation of XAI-Algorithms
 
 ## Usage
 
+
+### General Notes on Paths
+
+Many scripts and notebooks in this repo depend on paths. To ensure that the code runs on different machines (local development machines, HPC, etc) we use a `.env` file. This file is machine-specific and is expected to define the necessary paths in environment variables.
+
+Example:
+
+```.env
+BASE_DIR="/home/username/axaiev/data
+```
+
+This file is evaluated by `utils.read_paths_from_dotenv()`. Note: The package `opencv-python` has to be installed (see `requirements.txt`)
+
+
+### Unittests
+
+To ensure the environment is setup as expected run `pytest -s Code/tests.py`.
+
 ### `inference.py`
 
 ### Examples
@@ -26,10 +44,10 @@ The output images are created within the class folders in the path 'inference/cl
 - `python gradcamheatmap.py --model_full_name $MODEL_FULL_NAME`
 
 -  the data path can be specified (as parent folder of "atsds_large")
-- `python gradcamheatmap.py --model_full_name simple_cnn_1_1 --data_base_path /home/ck/mnt/XAI-DIA-gl/Julian/Dataset_Masterarbeit`
+    - `python gradcamheatmap.py --model_full_name simple_cnn_1_1 -cp /home/ck/mnt/XAI-DIA-gl/Julian/Dataset_Masterarbeit/model_checkpoints --data_base_path /home/ck/mnt/XAI-DIA-gl/Julian/Dataset_Masterarbeit`
 
 Output:
-The masks(npy files) and images with masks are created as out put in '$data_base_path/auswertung/$MODEL_FULL_NAME/gradcam/test' folder.
+The masks (npy files) and images with masks are created as out put in '$data_base_path/auswertung/$MODEL_FULL_NAME/gradcam/test' folder.
 
 #### Occlusion
 
@@ -56,4 +74,3 @@ Steps to follow:
     -  In the second cell, change the MODEL_TYPE, XAI_NAME, CHECKPOINT_PATH accordingly.
     -  In fourth cell, change the list of xai_methods for plot accordingly.
 - Now the plot for the selected xai methods for the selected model is displayed.
-
