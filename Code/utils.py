@@ -115,8 +115,8 @@ def generate_adversarial_examples(
                 adv_example_save.save(os.path.join(output_dir, imagename))
 
 
-def create_image_dict(DATASET, DATASET_SPLIT):
-    IMAGES_PATH = os.path.join('data', DATASET, DATASET_SPLIT)
+def create_image_dict(BASE_DIR, DATASET, DATASET_SPLIT):
+    IMAGES_PATH = os.path.join(BASE_DIR, DATASET, DATASET_SPLIT)
 
     # Define our Categories
     CATEGORIES = sorted(os.listdir(IMAGES_PATH))
