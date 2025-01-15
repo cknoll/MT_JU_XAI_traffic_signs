@@ -114,11 +114,13 @@ def main():
     model_cpt = args.model_full_name + ".tar"
 
     # DATASET_PATH = "data"
+    # `BASE_DIR` was `DATASET_PATH` in earlier versions
+    # TODO: unify this with reading paths from .env file
     if args.data_base_path is None:
         # if argument is not passed: use hardcoded default
-        DATASET_PATH = "/data/horse/ws/knoll-traffic_sign_reproduction"
+        BASE_DIR = "/data/horse/ws/knoll-traffic_sign_reproduction"
     else:
-        DATASET_PATH = args.data_base_path
+        BASE_DIR = args.data_base_path
 
     dataset_type = "atsds_large"
     dataset_split = "test"
@@ -141,7 +143,7 @@ def main():
     device = torch.device("cpu") if not torch.cuda.is_available() else torch.device("cuda:0")
     print("Using device", device)
 
-    testset = ATSDS(root=DATASET_PATH, split=dataset_split, dataset_type=dataset_type, transform=transform_test)
+    testset = ATSDS(root=BASE_DIR, split=dataset_split, dataset_type=dataset_type, transform=transform_test)
     testloader = torch.utils.data.DataLoader(testset, batch_size = 1, shuffle = True, num_workers = 2)
     import torchvision
     print(torchvision.__file__)
@@ -177,7 +179,7 @@ def main():
 
     # IMAGES_PATH = 'data/' + dataset_type + '/' + dataset_split + '/'
     # IMAGES_PATH = '/data/horse/ws/knoll-traffic_sign_reproduction/' + dataset_type + '/' + dataset_split + '/'
-    IMAGES_PATH = os.path.join(DATASET_PATH, dataset_type, dataset_split)
+    IMAGES_PATH = os.path.join(BASE_DIR, dataset_type, dataset_split)
 
     # Define our Categories
     CATEGORIES = sorted(os.listdir(IMAGES_PATH))
@@ -224,7 +226,7 @@ def main():
     IMAGES_SUFFIX = '.png'
     # output_path = 'data/auswertung/' + model_name + "/" + "gradcam/" + dataset_split + "/"
     # output_path = '/data/horse/ws/knoll-traffic_sign_reproduction/auswertung/' + model_name + "/" + "gradcam/" + dataset_split + "/"
-    output_path = os.path.join(DATASET_PATH, model_name, "gradcam/", dataset_split)
+    output_path = os.path.join(BASE_DIR, "XAI_results", model_name, "gradcam/", dataset_split)
 
 
     # This creates the needed folders inside. As mentioned above the Folder defined in output_path has to already exist
