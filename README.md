@@ -96,6 +96,46 @@ The output images are created within the class folders in the path 'inference/cl
 Output:
 The masks (npy files) and images with masks are created as out put in '$data_base_path/auswertung/$MODEL_FULL_NAME/gradcam/test' folder.
 
+#### Creating Prism heatmaps
+
+- `python PRISM_pipeline.py --model_name simple_cnn --model_checkpoint model/simple_cnn_1_1.tar` 
+
+-  the data path can be specified (as parent folder of "atsds_large")
+    - `python PRISM_pipeline.py --model_name simple_cnn --model_checkpoint model/simple_cnn_1_1.tar --dataset_path data ---images_path data/atsds_large/test --output_path data/XAI_results/` 
+
+Output:
+The masks (npy files) and images with masks are created as out put in '$data_base_path/XAI_results/$MODEL_FULL_NAME/prism/test' folder.
+
+#### Creating Lime heatmaps
+
+- `python lime_pipeline.py --model_name simple_cnn --model_checkpoint model/simple_cnn_1_1.tar` 
+
+-  the data path can be specified (as parent folder of "atsds_large")
+    - `python lime_pipeline.py --model_name simple_cnn --model_checkpoint model/simple_cnn_1_1.tar --dataset_path data ---images_path data/atsds_large/test --output_path data/XAI_results/` 
+
+Output:
+The masks (npy files) and images with masks are created as out put in '$data_base_path/XAI_results/$MODEL_FULL_NAME/lime/test' folder.
+
+#### Creating Integrated Gradients heatmaps
+
+- `python int_g_pipeline.py --model_name simple_cnn --model_checkpoint model/simple_cnn_1_1.tar` 
+
+-  the data path can be specified (as parent folder of "atsds_large")
+    - `python int_g_pipeline.py --model_name simple_cnn --model_checkpoint model/simple_cnn_1_1.tar --dataset_path data ---images_path data/atsds_large/test --output_path data/XAI_results/` 
+
+Output:
+The masks (npy files) and images with masks are created as out put in '$data_base_path/XAI_results/$MODEL_FULL_NAME/ig/test' folder.
+
+#### Creating Xrai heatmaps
+
+- `python Xrai_pipeline.py --model_name simple_cnn --model_checkpoint model/simple_cnn_1_1.tar` 
+
+-  the data path can be specified (as parent folder of "atsds_large")
+    - `python Xrai_pipeline.py --model_name simple_cnn --model_checkpoint model/simple_cnn_1_1.tar --dataset_path data ---images_path data/atsds_large/test --output_path data/XAI_results/` 
+
+Output:
+The masks (npy files) and images with masks are created as out put in '$data_base_path/XAI_results/$MODEL_FULL_NAME/xrai/test' folder.
+
 #### Occlusion
 
 Steps to follow:
