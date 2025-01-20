@@ -207,7 +207,7 @@ def main():
         GRADCAM_TARGET_LAYER = model.conv3 # Simple CNN
     elif model_name == "resnet50":
         GRADCAM_TARGET_LAYER = model.layer4[-1].conv3
-    elif model_name == "convnext":
+    elif model_name == "convnext_tiny":
         GRADCAM_TARGET_LAYER = model.features[-1][-1].block[0]
     elif model_name == "vgg16":
         GRADCAM_TARGET_LAYER = model.features[-3]
