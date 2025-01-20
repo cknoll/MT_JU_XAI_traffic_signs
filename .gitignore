@@ -5,3 +5,22 @@ __pycache__/*
 inference
 results.json
 .env
+
+#Database and Models
+Code/data
+Code/model
+
+#Checkpoints / cache
+Code/.ipynb_checkpoints
+Code/__pycache__
+Code/.idea/*
+.ipynb_checkpoints
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
