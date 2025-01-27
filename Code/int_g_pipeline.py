@@ -7,8 +7,8 @@ import random
 import numpy as np
 import cv2
 from PIL import Image
-from captum.attr import IntegratedGradients
-from captum.attr import visualization as viz
+# from captum.attr import IntegratedGradients
+# from captum.attr import visualization as viz
 
 ## PyTorch
 import torch
@@ -21,7 +21,7 @@ import torch.nn.functional as F
 from utils import setup_environment, prepare_categories_and_images, create_output_directories, save_xai_outputs, load_checkpoint, normalize_image, get_rgb_heatmap
 from ATSDS import ATSDS
 from model import get_model
-
+import integrated_gradients as int_g
 
 def parse_args():
     """Parse command-line arguments."""
@@ -43,29 +43,70 @@ def parse_args():
     return parser.parse_args()
 
 
-def compute_ig_masks(model, device, categories, imagedict, label_idx_dict, output_path, images_path):
-    """Generate Integrated Gradients visualizations for each image in the dataset."""
-    # Initialize Integrated Gradients
-    ig = IntegratedGradients(model)
+# def compute_ig_masks1(model, device, categories, imagedict, label_idx_dict, output_path, images_path):
+#     """Generate Integrated Gradients visualizations for each image in the dataset."""
+#     # Initialize Integrated Gradients
+#     ig = IntegratedGradients(model)
 
+#     for category in categories:
+#         images = imagedict[category]
+#         for image_name in images:
+#             image_path = os.path.join(images_path, category, image_name)
+#             with open(image_path, 'rb') as f:
+#                 with Image.open(f) as current_image:
+#                     current_image_tensor = TRANSFORM_TEST(current_image).unsqueeze(0).to(device)
+#                     current_image_tensor.requires_grad = True
+
+#                     # Set baseline as a tensor of zeros
+#                     baseline = torch.zeros_like(current_image_tensor)
+
+#                     # Perform Integrated Gradients computation
+#                     attr_ig = ig.attribute(current_image_tensor, baselines=baseline, target=label_idx_dict[category])
+#                     attr_ig = attr_ig.squeeze().detach().cpu().numpy()
+
+#                     # Convert to visualization format
+#                     ig_mask = np.sum(attr_ig, axis=0)  # Aggregate across channels
+#                     ig_mask = normalize_image(ig_mask)
+
+#                     # Overlay IG mask on original image
+#                     overlay_image = np.array(current_image).astype(np.float32) / 255.0
+#                     mask_on_image_result = mask_on_image_ig(ig_mask, overlay_image, alpha=0.3)
+
+#                     # Create output directories if they do not exist
+#                     mask_output_dir = os.path.join(output_path, category, 'mask')
+#                     overlay_output_dir = os.path.join(output_path, category, 'mask_on_image')
+#                     os.makedirs(mask_output_dir, exist_ok=True)
+#                     os.makedirs(overlay_output_dir, exist_ok=True)
+
+#                     # Save IG mask and overlay image
+#                     mask_output_path = os.path.join(mask_output_dir, image_name.replace('.jpg', '.npy'))
+#                     overlay_output_path = os.path.join(overlay_output_dir, image_name)
+#                     np.save(mask_output_path, ig_mask)
+#                     Image.fromarray((mask_on_image_result * 255).astype(np.uint8)).save(overlay_output_path, "PNG")
+
+
+def compute_ig_masks(model, device, categories, imagedict, label_idx_dict, output_path, images_path, runs=64):
+    """Generate Integrated Gradients visualizations for each image in the dataset using int_g.get_ig_attributions."""
     for category in categories:
         images = imagedict[category]
         for image_name in images:
             image_path = os.path.join(images_path, category, image_name)
             with open(image_path, 'rb') as f:
                 with Image.open(f) as current_image:
+                    # Preprocess the image to get the input tensor
                     current_image_tensor = TRANSFORM_TEST(current_image).unsqueeze(0).to(device)
-                    current_image_tensor.requires_grad = True
 
-                    # Set baseline as a tensor of zeros
-                    baseline = torch.zeros_like(current_image_tensor)
-
-                    # Perform Integrated Gradients computation
-                    attr_ig = ig.attribute(current_image_tensor, baselines=baseline, target=label_idx_dict[category])
-                    attr_ig = attr_ig.squeeze().detach().cpu().numpy()
+                    # Perform Integrated Gradients computation using int_g.get_ig_attributions
+                    ig_attributions = int_g.get_ig_attributions(
+                        model=model,
+                        input_tensor=current_image_tensor,
+                        target=label_idx_dict[category],
+                        runs=runs
+                    )
+                    ig_attributions = ig_attributions.squeeze().detach().cpu().numpy()
 
                     # Convert to visualization format
-                    ig_mask = np.sum(attr_ig, axis=0)  # Aggregate across channels
+                    ig_mask = np.sum(ig_attributions, axis=0)  # Aggregate across channels
                     ig_mask = normalize_image(ig_mask)
 
                     # Overlay IG mask on original image
