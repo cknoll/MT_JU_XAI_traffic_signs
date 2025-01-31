@@ -99,11 +99,11 @@ def compute_ig_masks(model, device, categories, imagedict, label_idx_dict, outpu
                     # Perform Integrated Gradients computation using int_g.get_ig_attributions
                     ig_attributions = int_g.get_ig_attributions(
                         model=model,
-                        input_tensor=current_image_tensor,
-                        target=label_idx_dict[category],
+                        image_tensor=current_image_tensor,
+                        label_idx=label_idx_dict[category],
                         runs=runs
                     )
-                    ig_attributions = ig_attributions.squeeze().detach().cpu().numpy()
+                    # ig_attributions = ig_attributions.squeeze().detach().cpu().numpy()
 
                     # Convert to visualization format
                     ig_mask = np.sum(ig_attributions, axis=0)  # Aggregate across channels

@@ -8,7 +8,7 @@ import torch
 
 import numpy as np
 import cv2
-
+from dotenv import load_dotenv
 # from dotenv import load_dotenv
 
 
@@ -94,10 +94,6 @@ def get_percentage_of_image_1d(image,mask,percentage, fill_value = 0.0):
         masked_image = np.where(mask-cutoff>0.0,image,fill_value)
     return masked_image
 
-def get_input_tensors(image):
-    return transform_test(image).unsqueeze(0)
-
-
 def get_contained_part(mask1,mask2):
     mask1,mask2 = normalize_image(mask1),normalize_image(mask2)
     return np.array((mask1 == 1.0) & (mask2 == 1.0))
@@ -108,10 +104,18 @@ def get_default_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--model_full_name", "-n", type=str, required=True, help="Full model name (e.g., simple_cnn_1_1)"
     )
-    parser.add_argument("--model_cp_base_path", "-cp", type=str, help="directory of model checkpoints", default=None)
-    parser.add_argument("--data_base_path", "-d", type=str, help="data path", default=None)
-    return parser
+    parser.add_argument("--model_cp_base_path", "-cp", type=str, help="directory of model checkpoints")
+    parser.add_argument("--data_base_path", "-d", type=str, help="data path")
+    # parser.add_argument('--output_path', type=str, default="data/XAI_results/", help="Path to save outputs.")
+    parser.add_argument('--dataset_type', type=str, default="atsds_large", help="Type of the dataset.")
+    parser.add_argument('--dataset_split', type=str, default="test", help="Dataset split (e.g., 'train', 'test').")
+    parser.add_argument('--random_seed', type=int, default=1414, help="Random seed for reproducibility.")
+    parser.add_argument('--batch_size', type=int, default=1, help="Batch size for data loader.")
+    parser.add_argument('--num_workers', type=int, default=2, help="Number of workers for data loading.")
+    parser.add_argument('--num_samples', type=int, default=100, help="Number of images for PRISM explanation.")
 
+    return parser
+    
 def generate_adversarial_examples(
     adv_folder,
     pct_range,
@@ -172,8 +176,11 @@ def read_conf_from_dotenv() -> SimpleNamespace:
 
     conf = SimpleNamespace()
     conf.BASE_DIR = os.getenv("BASE_DIR")
+    conf.MODEL_DIR = os.getenv("MODEL_DIR")
 
     assert conf.BASE_DIR is not None
+    assert conf.MODEL_DIR is not None
+
     return conf
 
 
