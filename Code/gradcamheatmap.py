@@ -23,7 +23,7 @@ import torch.optim as optim
 from ATSDS import ATSDS
 from gradcam import get_gradcam
 from model import get_model, load_model
-from utils import  get_default_arg_parser, mask_on_image, prepare_categories_and_images, setup_environment, read_conf_from_dotenv
+from utils import  get_default_arg_parser, prepare_categories_and_images, setup_environment, read_conf_from_dotenv, save_xai_outputs, create_output_directories
 
 try:
     # some optional debugging helpers
@@ -43,6 +43,33 @@ def normalize_image(img):
 def get_input_tensors(image):
     return transform_test(image).unsqueeze(0)
 
+def generate_gradcam_visualizations(model: torch.nn.Module, device: torch.device, categories: list[str],
+                                     imagedict: dict[str, list[str]], label_idx_dict: dict[str, int],
+                                     output_path: str, images_path: str, target_layer: torch.nn.Module) -> None:
+    """
+    Generate Grad-CAM visualizations for each image in the dataset and save them.
+
+    Args:
+        model (torch.nn.Module): The model to be used for generating Grad-CAM visualizations.
+        device (torch.device): The device to run the model on (GPU or CPU).
+        categories (list): List of categories in the dataset.
+        imagedict (dict): A dictionary of image filenames for each category.
+        label_idx_dict (dict): A dictionary mapping category names to indices.
+        output_path (str): Path where Grad-CAM results will be saved.
+        images_path (str): Path to the dataset images.
+        target_layer (torch.nn.Module): The target layer for Grad-CAM.
+    """
+    for category in categories:
+        model.eval()
+        images = imagedict[category]
+        for image_name in images:
+            with Image.open(os.path.join(images_path, category, image_name)) as img:
+                image_tensor = transform_test(img).unsqueeze(0).to(device)
+                shape = img.size[::-1]  # PIL uses (width, height)
+
+                mask, _ = get_gradcam(model, target_layer, image_tensor, label_idx_dict[category], shape)
+                save_xai_outputs(mask, np.array(img), category, image_name, output_path)
+
 def main():
 
     parser = get_default_arg_parser()
@@ -59,30 +86,24 @@ def main():
     conf = read_conf_from_dotenv()
 
     if args.data_base_path is None:
-        # if argument is not passed: use hardcoded default
+        # from .env
         BASE_DIR = conf.BASE_DIR
     else:
         BASE_DIR = args.data_base_path
 
     if args.model_cp_base_path is None:
-        # if argument is not passed: use hardcoded default  
+        # from .env
         CHECKPOINT_PATH = conf.MODEL_DIR
     else:
         CHECKPOINT_PATH = args.model_cp_base_path
 
     IMAGES_PATH = os.path.join(BASE_DIR, dataset_type, dataset_split)
-    output_path = os.path.join(BASE_DIR, "XAI_results", model_name, "gradcam/", dataset_split)
-
-    # This creates the needed folders inside. 
-    if not os.path.isdir(output_path):
-        os.makedirs(output_path)
+    output_path = os.path.join(BASE_DIR, "XAI_results", model_name, "gradcam", dataset_split)
 
     # Setup environment
     device = setup_environment(random_seed)
 
     testset = ATSDS(root=BASE_DIR, split=dataset_split, dataset_type=dataset_type, transform=transform_test)
-
-    #################
 
     model = get_model(model_name, n_classes = testset.get_num_classes())
     model = model.to(device)
@@ -93,13 +114,9 @@ def main():
     optimizer = optim.Adam(model.parameters())
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,200)
 
-    epoch,trainstats = load_model(model, optimizer, scheduler, CHECKPOINT_PATH + model_cpt, device)
+    epoch,trainstats = load_model(model, optimizer, scheduler, os.path.join(CHECKPOINT_PATH, model_cpt), device)
     print(f"Model checkpoint loaded. Epoch: {epoch}")
     
-    # Prepare categories and images
-    CATEGORIES, label_idx_dict, imagedict = prepare_categories_and_images(IMAGES_PATH)
-
-    output_types = ["mask","mask_on_image"]
     ##############
 
     # print(model) # confirm gradcam layer if necessary
@@ -114,35 +131,17 @@ def main():
 
     print(GRADCAM_TARGET_LAYER)
 
-    # Define what percentage cutouts you want.
-    # If you are only interested in the masks you can just make this an empty list []
+    # Prepare categories and images
+    categories, label_idx_dict, imagedict = prepare_categories_and_images(IMAGES_PATH)
 
-    class_to_dataset_class_dict = {}
-    for cat in CATEGORIES:
-        class_to_dataset_class_dict[cat] = cat
+    # Ensure output directories exist
+    create_output_directories(output_path, categories)
 
-        for outputs in output_types:
-            os.makedirs(os.path.join(output_path, cat, outputs), exist_ok=True)
-
-    for cat in class_to_dataset_class_dict:
-        model.eval()
-        images = imagedict[cat]
-        for imagename in images:
-            fpath = os.path.abspath(os.path.join(IMAGES_PATH, cat, imagename))
-            with open(fpath, 'rb') as f:
-                with Image.open(f) as current_image:
-                    current_image_tensor = get_input_tensors(current_image)
-                    #print(imagename, class_to_dataset_class_dict[image_class])
-                # These values are only used for the example pictures, the pipeline values are below them.
-                current_image_tensor = current_image_tensor.cuda()
-                shape = (np.array(current_image).shape[0],np.array(current_image).shape[1])
-                original_mask, _ = get_gradcam(model,GRADCAM_TARGET_LAYER,current_image_tensor,label_idx_dict[class_to_dataset_class_dict[cat]],shape)
-                image = np.copy(current_image)
-                mask = np.copy(original_mask)
-                np.save(os.path.join(output_path, cat, "mask", imagename), mask)
-                overlay_image = (mask_on_image(normalize_image(mask),normalize_image(image),alpha=0.3)*255).astype(np.uint8)
-                save_overlay_image = Image.fromarray(overlay_image)
-                save_overlay_image.save(os.path.join(output_path, cat, "mask_on_image", imagename), "PNG")
+    # Run Grad-CAM visualization
+    generate_gradcam_visualizations(
+        model, device, categories, imagedict, label_idx_dict, 
+        output_path, IMAGES_PATH, GRADCAM_TARGET_LAYER
+    )
 
 if __name__ == "__main__":
     main()
