@@ -3,7 +3,7 @@ import argparse
 import os
 import random
 import numpy as np
-
+import matplotlib.pyplot as plt
 ##PyTorch
 import torch
 import torch.optim as optim
@@ -34,7 +34,7 @@ def parse_args():
     parser.add_argument('--dataset_type', type=str, default="atsds_large", help="Type of the dataset.")
     parser.add_argument('--dataset_split', type=str, default="test", help="Dataset split (e.g., 'train', 'test').")
     parser.add_argument('--images_path', type=str, default="data/atsds_large/test", help="Path to the images.")
-    parser.add_argument('--output_path', type=str, default="data/auswertung/", help="Path to save outputs.")
+    parser.add_argument('--output_path', type=str, default="data/XAI_results/", help="Path to save outputs.")
     parser.add_argument('--random_seed', type=int, default=1414, help="Random seed for reproducibility.")
     parser.add_argument('--batch_size', type=int, default=1, help="Batch size for data loader.")
     parser.add_argument('--num_workers', type=int, default=2, help="Number of workers for data loading.")
@@ -48,7 +48,8 @@ def generate_prism_visualizations(model, device, categories, imagedict, label_id
     # Register hooks for PRISM
     PRISM.prune_old_hooks(model)
     PRISM.register_hooks(model)
-
+    print("Hooks registered:", any(module._forward_hooks for module in model.modules()))
+    # print(PRISM.get_maps())
     for category in categories:
         images = imagedict[category]
         for image_name in images:
@@ -61,6 +62,15 @@ def generate_prism_visualizations(model, device, categories, imagedict, label_id
 
                     # Retrieve PRISM maps
                     prism_maps = PRISM.get_maps()
+                    # print(f"PRISM maps shape: {prism_maps.shape}")
+                    # print(f"PRISM maps values (sample): {prism_maps[0, :, :, :].detach().cpu().numpy()[:5, :5]}")
+                    # for channel_idx in range(prism_maps.size(1)):
+                    #     channel_map = prism_maps[0, channel_idx, :, :].detach().cpu().numpy()
+                    #     plt.figure()
+                    #     plt.imshow(channel_map, cmap='viridis')
+                    #     plt.colorbar()
+                    #     plt.title(f"PRISM Map - Channel {channel_idx}")
+                    #     plt.show()
                     drawable_prism_maps = prism_maps.permute(0, 2, 3, 1).detach().cpu().numpy().squeeze()
 
                     # Save PRISM maps overlayed on original image
@@ -73,7 +83,31 @@ def generate_prism_visualizations(model, device, categories, imagedict, label_id
                     mask_f = np.max(mask_norm, axis=2)
                     mask = normalize_image(F.interpolate(F.relu(torch.Tensor(mask_f)).reshape(1, 1, 224, 224),
                                                          (512, 512), mode="bilinear").squeeze().squeeze().numpy())
-                    np.save(os.path.join(output_path, category, 'mask', image_name), mask)
+                    #smooth heatmap                                    
+                    mask_tensor = torch.tensor(mask, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+                    pooled_mask = avg_pooling(mask_tensor, kernel_size=129, stride=1)
+
+                    grad_mask = (
+                        normalize_image(mask) +
+                        normalize_image(pooled_mask.squeeze().numpy()) / 100
+                    )
+
+                    np.save(os.path.join(output_path, category, 'mask', image_name), grad_mask)
+
+def avg_pooling(mask: torch.Tensor, kernel_size: int , stride: int) -> torch.Tensor:
+    """
+    Apply average pooling to a tensor.
+
+    Args:
+        mask (torch.Tensor): The input tensor to pool.
+        kernel_size (int): Size of the pooling kernel. Default is 129.
+        stride (int): Stride of the pooling operation. Default is 1.
+
+    Returns:
+        torch.Tensor: The pooled tensor.
+    """
+    pooling = torch.nn.AvgPool2d(kernel_size=kernel_size, stride=stride, padding=kernel_size//2,count_include_pad=False)
+    return pooling(mask)
 
 def main():
     # Parse command-line arguments

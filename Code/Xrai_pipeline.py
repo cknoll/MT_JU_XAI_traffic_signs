@@ -31,7 +31,7 @@ def parse_args():
     parser.add_argument('--dataset_type', type=str, default="atsds_large", help="Type of the dataset.")
     parser.add_argument('--dataset_split', type=str, default="test", help="Dataset split (e.g., 'train', 'test').")
     parser.add_argument('--images_path', type=str, default="data/atsds_large/test", help="Path to the images.")
-    parser.add_argument('--output_path', type=str, default="data/auswertung/", help="Path to save outputs.")
+    parser.add_argument('--output_path', type=str, default="data/XAI_results/", help="Path to save outputs.")
     parser.add_argument('--random_seed', type=int, default=1414, help="Random seed for reproducibility.")
     parser.add_argument('--batch_size', type=int, default=1, help="Batch size for data loader.")
     parser.add_argument('--num_samples', type=int, default=100, help="Number of images for XRAI explanation.")
@@ -77,14 +77,39 @@ def generate_xrai_visualizations(model, device, categories, imagedict, label_idx
                         mode="bilinear"
                     ).squeeze().numpy())
 
-                    # Save XRAI mask
-                    mask_output_path = os.path.join(output_path, category, "mask", image_name)
-                    np.save(mask_output_path, mask)
+                    # attribs = pickle.load(file)
+                    # mask_raw = xrai_obj.GetMask(np.moveaxis(np.array(current_image_tensor),0,2),_,base_attribution = np.moveaxis(attribs,0,2))
+                    # mask = normalize_image(F.interpolate(torch.Tensor(mask_raw).reshape(1,1,224,224),(512,512),mode = "bilinear").squeeze().squeeze().numpy())
+                    # image = np.copy(current_image)
+                    #smooth heatmap                                    
+                    mask_tensor = torch.tensor(mask, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+                    pooled_mask = avg_pooling(mask_tensor, kernel_size=129, stride=1)
+
+                    grad_mask = (
+                        normalize_image(mask) +
+                        normalize_image(pooled_mask.squeeze().numpy()) / 100
+                    )
+                    np.save(os.path.join(output_path, category, 'mask', image_name), grad_mask)
 
                     # Overlay XRAI mask on the original image
                     overlay_image = mask_on_image_ig(normalize_image(mask), normalize_image(np.array(current_image)))
                     overlay_output_path = os.path.join(output_path, category, "mask_on_image", image_name)
                     Image.fromarray((overlay_image * 255).astype(np.uint8)).save(overlay_output_path, "PNG")
+
+def avg_pooling(mask: torch.Tensor, kernel_size: int , stride: int) -> torch.Tensor:
+    """
+    Apply average pooling to a tensor.
+
+    Args:
+        mask (torch.Tensor): The input tensor to pool.
+        kernel_size (int): Size of the pooling kernel. Default is 129.
+        stride (int): Stride of the pooling operation. Default is 1.
+
+    Returns:
+        torch.Tensor: The pooled tensor.
+    """
+    pooling = torch.nn.AvgPool2d(kernel_size=kernel_size, stride=stride, padding=kernel_size//2,count_include_pad=False)
+    return pooling(mask)
 
 def mask_on_image_ig(mask, img, alpha=0.5):
     # Ensure the mask and image have the same dimensions
