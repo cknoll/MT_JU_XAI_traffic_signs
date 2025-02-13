@@ -18,29 +18,10 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 ## Local libraries
-from utils import setup_environment, prepare_categories_and_images, create_output_directories, save_xai_outputs, load_checkpoint, normalize_image, get_rgb_heatmap
+from utils import get_default_arg_parser, read_conf_from_dotenv, setup_environment, prepare_categories_and_images, create_output_directories, save_xai_outputs, normalize_image, get_rgb_heatmap
 from ATSDS import ATSDS
-from model import get_model
+from model import get_model, load_model
 import integrated_gradients as int_g
-
-def parse_args():
-    """Parse command-line arguments."""
-    parser = argparse.ArgumentParser(description="Integrated Gradients Visualization Pipeline")
-
-    # Configuration variables
-    parser.add_argument('--model_name', type=str, default="simple_cnn", help="Name of the model.")
-    parser.add_argument('--model_checkpoint', type=str, default="model/simple_cnn_1_1.tar", help="Path to the model checkpoint.")
-    parser.add_argument('--dataset_path', type=str, default="data", help="Path to the dataset.")
-    parser.add_argument('--dataset_type', type=str, default="atsds_large", help="Type of the dataset.")
-    parser.add_argument('--dataset_split', type=str, default="test", help="Dataset split (e.g., 'train', 'test').")
-    parser.add_argument('--images_path', type=str, default="data/atsds_large/test", help="Path to the images.")
-    parser.add_argument('--output_path', type=str, default="data/auswertung/", help="Path to save outputs.")
-    parser.add_argument('--random_seed', type=int, default=1414, help="Random seed for reproducibility.")
-    parser.add_argument('--batch_size', type=int, default=1, help="Batch size for data loader.")
-    parser.add_argument('--num_workers', type=int, default=2, help="Number of workers for data loading.")
-    parser.add_argument('--num_samples', type=int, default=100, help="Number of images for IG explanation.")
-
-    return parser.parse_args()
 
 
 # def compute_ig_masks1(model, device, categories, imagedict, label_idx_dict, output_path, images_path):
@@ -85,45 +66,57 @@ def parse_args():
 #                     Image.fromarray((mask_on_image_result * 255).astype(np.uint8)).save(overlay_output_path, "PNG")
 
 
-def compute_ig_masks(model, device, categories, imagedict, label_idx_dict, output_path, images_path, runs=64):
-    """Generate Integrated Gradients visualizations for each image in the dataset using int_g.get_ig_attributions."""
+def compute_ig_masks(model: torch.nn.Module, device: torch.device, categories: list[str], 
+                       imagedict: dict[str, list[str]], label_idx_dict: dict[str, int], 
+                       output_path: str, images_path: str, runs: int = 64) -> None:
+    """
+    Generate Integrated Gradients (IG) visualizations for each image in the dataset and save them.
+
+    Args:
+        model (torch.nn.Module): The model used for generating IG visualizations.
+        device (torch.device): The device to run the model on (GPU or CPU).
+        categories (list): List of categories in the dataset.
+        imagedict (dict): A dictionary of image filenames for each category.
+        label_idx_dict (dict): A dictionary mapping category names to indices.
+        output_path (str): Path where IG results will be saved.
+        images_path (str): Path to the dataset images.
+        runs (int, optional): Number of IG runs for smoothing. Defaults to 64.
+    """
     for category in categories:
         images = imagedict[category]
         for image_name in images:
-            image_path = os.path.join(images_path, category, image_name)
-            with open(image_path, 'rb') as f:
-                with Image.open(f) as current_image:
-                    # Preprocess the image to get the input tensor
-                    current_image_tensor = TRANSFORM_TEST(current_image).unsqueeze(0).to(device)
+            with Image.open(os.path.join(images_path, category, image_name)) as img:
+                # Preprocess the image to get the input tensor
+                current_image_tensor = TRANSFORM_TEST(img).unsqueeze(0).to(device)
 
-                    # Perform Integrated Gradients computation using int_g.get_ig_attributions
-                    ig_attributions = int_g.get_ig_attributions(
-                        model=model,
-                        image_tensor=current_image_tensor,
-                        label_idx=label_idx_dict[category],
-                        runs=runs
-                    )
-                    # ig_attributions = ig_attributions.squeeze().detach().cpu().numpy()
+                # Perform Integrated Gradients computation using int_g.get_ig_attributions
+                ig_attributions = int_g.get_ig_attributions(
+                    model=model,
+                    image_tensor=current_image_tensor,
+                    label_idx=label_idx_dict[category],
+                    runs=runs
+                )
+                # ig_attributions = ig_attributions.squeeze().detach().cpu().numpy()
 
-                    # Convert to visualization format
-                    ig_mask = np.sum(ig_attributions, axis=0)  # Aggregate across channels
-                    ig_mask = normalize_image(ig_mask)
+                # Convert to visualization format
+                ig_mask = np.sum(ig_attributions, axis=0)  # Aggregate across channels
+                ig_mask = normalize_image(ig_mask)
 
-                    # Overlay IG mask on original image
-                    overlay_image = np.array(current_image).astype(np.float32) / 255.0
-                    mask_on_image_result = mask_on_image_ig(ig_mask, overlay_image, alpha=0.3)
+                # Overlay IG mask on original image
+                overlay_image = np.array(img).astype(np.float32) / 255.0
+                mask_on_image_result = mask_on_image_ig(ig_mask, overlay_image, alpha=0.3)
 
-                    # Create output directories if they do not exist
-                    mask_output_dir = os.path.join(output_path, category, 'mask')
-                    overlay_output_dir = os.path.join(output_path, category, 'mask_on_image')
-                    os.makedirs(mask_output_dir, exist_ok=True)
-                    os.makedirs(overlay_output_dir, exist_ok=True)
+                # Create output directories if they do not exist
+                mask_output_dir = os.path.join(output_path, category, 'mask')
+                overlay_output_dir = os.path.join(output_path, category, 'mask_on_image')
+                os.makedirs(mask_output_dir, exist_ok=True)
+                os.makedirs(overlay_output_dir, exist_ok=True)
 
-                    # Save IG mask and overlay image
-                    mask_output_path = os.path.join(mask_output_dir, image_name.replace('.jpg', '.npy'))
-                    overlay_output_path = os.path.join(overlay_output_dir, image_name)
-                    np.save(mask_output_path, ig_mask)
-                    Image.fromarray((mask_on_image_result * 255).astype(np.uint8)).save(overlay_output_path, "PNG")
+                # Save IG mask and overlay image
+                mask_output_path = os.path.join(mask_output_dir, image_name.replace('.PNG', '.npy'))
+                overlay_output_path = os.path.join(overlay_output_dir, image_name)
+                np.save(mask_output_path, ig_mask)
+                Image.fromarray((mask_on_image_result * 255).astype(np.uint8)).save(overlay_output_path, "PNG")
 
 
 def mask_on_image_ig(mask, img, alpha=0.5):
@@ -148,7 +141,34 @@ def mask_on_image_ig(mask, img, alpha=0.5):
 
 def main():
     # Parse command-line arguments
-    args = parse_args()
+    parser = get_default_arg_parser()
+    args = parser.parse_args()
+
+    # Changable Parameters
+    model_name = "_".join(args.model_full_name.split("_")[:-2])
+    model_cpt = args.model_full_name + ".tar"
+   
+    dataset_type = args.dataset_type
+    dataset_split = args.dataset_split
+    random_seed = args.random_seed
+
+    conf = read_conf_from_dotenv()
+
+    if args.data_base_path is None:
+        # from .env
+        BASE_DIR = conf.BASE_DIR
+    else:
+        BASE_DIR = args.data_base_path
+
+    if args.model_cp_base_path is None:
+        # from .env
+        CHECKPOINT_PATH = conf.MODEL_DIR
+    else:
+        CHECKPOINT_PATH = args.model_cp_base_path
+
+    IMAGES_PATH = os.path.join(BASE_DIR, dataset_type, dataset_split)
+    output_path = os.path.join(BASE_DIR, "XAI_results", model_name, "ig", dataset_split)
+
 
     # Transforms
     global TRANSFORM_TEST
@@ -160,30 +180,30 @@ def main():
     ])
 
     # Setup environment
-    device = setup_environment(args.random_seed)
+    device = setup_environment(random_seed)
 
     # Load dataset and dataloader
-    testset = ATSDS(root=args.dataset_path, split=args.dataset_split, dataset_type=args.dataset_type, transform=TRANSFORM_TEST)
+    testset = ATSDS(root= BASE_DIR, split=dataset_split, dataset_type=dataset_type, transform=TRANSFORM_TEST)
 
     # Load model
-    model = get_model(args.model_name, n_classes=testset.get_num_classes()).to(device)
+    model = get_model(model_name, n_classes = testset.get_num_classes())
+    model = model.to(device)
     model.eval()
     optimizer = optim.Adam(model.parameters())
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
     # Load checkpoint
-    epoch, trainstats = load_checkpoint(args.model_checkpoint, model, optimizer, scheduler, device)
+    epoch,trainstats = load_model(model, optimizer, scheduler, os.path.join(CHECKPOINT_PATH, model_cpt), device)
     print(f"Model checkpoint loaded. Epoch: {epoch}")
 
     # Prepare categories and images
-    categories, label_idx_dict, imagedict = prepare_categories_and_images(args.images_path)
+    categories, label_idx_dict, imagedict = prepare_categories_and_images(IMAGES_PATH)
 
     # Ensure output directories exist
-    output_path = os.path.join(args.output_path, args.model_name, "ig", "test/")
     create_output_directories(output_path, categories)
 
     # Generate Integrated Gradients visualizations
-    compute_ig_masks(model, device, categories, imagedict, label_idx_dict, output_path, args.images_path)
+    compute_ig_masks(model, device, categories, imagedict, label_idx_dict, output_path, IMAGES_PATH)
 
 
 if __name__ == "__main__":

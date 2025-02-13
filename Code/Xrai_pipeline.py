@@ -16,32 +16,23 @@ from torchvision import transforms
 
 ## Local libraries
 from ATSDS import ATSDS
-from model import get_model
-from utils import setup_environment, prepare_categories_and_images, create_output_directories, save_xai_outputs, load_checkpoint, normalize_image, get_rgb_heatmap
+from model import get_model, load_model
+from utils import get_default_arg_parser, read_conf_from_dotenv, setup_environment, prepare_categories_and_images, create_output_directories, save_xai_outputs, load_checkpoint, normalize_image, get_rgb_heatmap
 
-
-def parse_args():
-    """Parse command-line arguments."""
-    parser = argparse.ArgumentParser(description="XRAI Method Visualization Pipeline")
-
-    # Configuration variables
-    parser.add_argument('--model_name', type=str, default="simple_cnn", help="Name of the model.")
-    parser.add_argument('--model_checkpoint', type=str, default="model/simple_cnn_1_1.tar", help="Path to the model checkpoint.")
-    parser.add_argument('--dataset_path', type=str, default="data", help="Path to the dataset.")
-    parser.add_argument('--dataset_type', type=str, default="atsds_large", help="Type of the dataset.")
-    parser.add_argument('--dataset_split', type=str, default="test", help="Dataset split (e.g., 'train', 'test').")
-    parser.add_argument('--images_path', type=str, default="data/atsds_large/test", help="Path to the images.")
-    parser.add_argument('--output_path', type=str, default="data/XAI_results/", help="Path to save outputs.")
-    parser.add_argument('--random_seed', type=int, default=1414, help="Random seed for reproducibility.")
-    parser.add_argument('--batch_size', type=int, default=1, help="Batch size for data loader.")
-    parser.add_argument('--num_samples', type=int, default=100, help="Number of images for XRAI explanation.")
-
-    return parser.parse_args()
-
-
-def generate_xrai_visualizations(model, device, categories, imagedict, label_idx_dict, output_path, images_path):
+def generate_xrai_visualizations(model: torch.nn.Module, device: torch.device, categories: list[str], 
+                                 imagedict: dict[str, list[str]], label_idx_dict: dict[str, int], 
+                                 output_path: str, images_path: str) -> None:
     """
     Generate XRAI visualizations for each image in the dataset using precomputed IG masks.
+
+    Args:
+        model (torch.nn.Module): The model used for generating XRAI visualizations.
+        device (torch.device): The device to run the model on (GPU or CPU).
+        categories (list): List of categories in the dataset.
+        imagedict (dict): A dictionary of image filenames for each category.
+        label_idx_dict (dict): A dictionary mapping category names to indices.
+        output_path (str): Path where XRAI results will be saved.
+        images_path (str): Path to the dataset images.
     """
 
     # Initialize the XRAI object
@@ -50,7 +41,6 @@ def generate_xrai_visualizations(model, device, categories, imagedict, label_idx
     for category in categories:
         images = imagedict[category]
         for image_name in images:
-            image_path = os.path.join(images_path, category, image_name)
             ig_path = os.path.join(output_path.replace("xrai", "ig"), category, "mask", image_name + ".npy")
 
             # Check if IG mask exists
@@ -59,42 +49,37 @@ def generate_xrai_visualizations(model, device, categories, imagedict, label_idx
                 continue
 
             # Open and process the image
-            with open(image_path, 'rb') as f:
-                with Image.open(f) as current_image:
-                    current_image_tensor = TRANSFORM_TEST(current_image).unsqueeze(0).to(device)
+            with Image.open(os.path.join(images_path, category, image_name)) as img:
+                current_image_tensor = TRANSFORM_TEST(img).unsqueeze(0).to(device)
 
-                    # Convert current_image_tensor to (H, W, C)
-                    current_image_np = np.moveaxis(current_image_tensor.squeeze(0).cpu().numpy(), 0, -1)
+                # Convert current_image_tensor to (H, W, C)
+                current_image_np = np.moveaxis(current_image_tensor.squeeze(0).cpu().numpy(), 0, -1)
 
-                    # Load the IG mask
-                    ig_attribs = np.load(ig_path)
-                    mask_raw = xrai_obj.GetMask(current_image_np, None, base_attribution = np.repeat(ig_attribs[:, :, np.newaxis], 3, axis=2))
+                # Load the IG mask
+                ig_attribs = np.load(ig_path)
+                mask_raw = xrai_obj.GetMask(current_image_np, None, base_attribution = np.repeat(ig_attribs[:, :, np.newaxis], 3, axis=2))
 
-                    # Normalize the mask and resize
-                    mask = normalize_image(F.interpolate(
-                        torch.Tensor(mask_raw).unsqueeze(0).unsqueeze(0),
-                        size=(512, 512),
-                        mode="bilinear"
-                    ).squeeze().numpy())
+                # Normalize the mask and resize
+                mask = normalize_image(F.interpolate(
+                    torch.Tensor(mask_raw).unsqueeze(0).unsqueeze(0),
+                    size=(512, 512),
+                    mode="bilinear"
+                ).squeeze().numpy())
 
-                    # attribs = pickle.load(file)
-                    # mask_raw = xrai_obj.GetMask(np.moveaxis(np.array(current_image_tensor),0,2),_,base_attribution = np.moveaxis(attribs,0,2))
-                    # mask = normalize_image(F.interpolate(torch.Tensor(mask_raw).reshape(1,1,224,224),(512,512),mode = "bilinear").squeeze().squeeze().numpy())
-                    # image = np.copy(current_image)
-                    #smooth heatmap                                    
-                    mask_tensor = torch.tensor(mask, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
-                    pooled_mask = avg_pooling(mask_tensor, kernel_size=129, stride=1)
+                #smooth heatmap                                    
+                mask_tensor = torch.tensor(mask, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+                pooled_mask = avg_pooling(mask_tensor, kernel_size=129, stride=1)
 
-                    grad_mask = (
-                        normalize_image(mask) +
-                        normalize_image(pooled_mask.squeeze().numpy()) / 100
-                    )
-                    np.save(os.path.join(output_path, category, 'mask', image_name), grad_mask)
+                grad_mask = (
+                    normalize_image(mask) +
+                    normalize_image(pooled_mask.squeeze().numpy()) / 100
+                )
+                np.save(os.path.join(output_path, category, 'mask', image_name), grad_mask)
 
-                    # Overlay XRAI mask on the original image
-                    overlay_image = mask_on_image_ig(normalize_image(mask), normalize_image(np.array(current_image)))
-                    overlay_output_path = os.path.join(output_path, category, "mask_on_image", image_name)
-                    Image.fromarray((overlay_image * 255).astype(np.uint8)).save(overlay_output_path, "PNG")
+                # Overlay XRAI mask on the original image
+                overlay_image = mask_on_image_ig(normalize_image(mask), normalize_image(np.array(img)))
+                overlay_output_path = os.path.join(output_path, category, "mask_on_image", image_name)
+                Image.fromarray((overlay_image * 255).astype(np.uint8)).save(overlay_output_path, "PNG")
 
 def avg_pooling(mask: torch.Tensor, kernel_size: int , stride: int) -> torch.Tensor:
     """
@@ -106,6 +91,7 @@ def avg_pooling(mask: torch.Tensor, kernel_size: int , stride: int) -> torch.Ten
         stride (int): Stride of the pooling operation. Default is 1.
 
     Returns:
+    
         torch.Tensor: The pooled tensor.
     """
     pooling = torch.nn.AvgPool2d(kernel_size=kernel_size, stride=stride, padding=kernel_size//2,count_include_pad=False)
@@ -132,8 +118,34 @@ def mask_on_image_ig(mask, img, alpha=0.5):
     return np.copy(cam_on_img)
 
 def main():
-    # Parse command-line arguments
-    args = parse_args()
+       # Parse command-line arguments
+    parser = get_default_arg_parser()
+    args = parser.parse_args()
+
+    # Changable Parameters
+    model_name = "_".join(args.model_full_name.split("_")[:-2])
+    model_cpt = args.model_full_name + ".tar"
+   
+    dataset_type = args.dataset_type
+    dataset_split = args.dataset_split
+    random_seed = args.random_seed
+
+    conf = read_conf_from_dotenv()
+
+    if args.data_base_path is None:
+        # from .env
+        BASE_DIR = conf.BASE_DIR
+    else:
+        BASE_DIR = args.data_base_path
+
+    if args.model_cp_base_path is None:
+        # from .env
+        CHECKPOINT_PATH = conf.MODEL_DIR
+    else:
+        CHECKPOINT_PATH = args.model_cp_base_path
+
+    IMAGES_PATH = os.path.join(BASE_DIR, dataset_type, dataset_split)
+    output_path = os.path.join(BASE_DIR, "XAI_results", model_name, "xrai", dataset_split)
 
     # Transforms
     global TRANSFORM_TEST
@@ -145,32 +157,32 @@ def main():
     ])
 
     # Setup environment
-    device = setup_environment(args.random_seed)
+    device = setup_environment(random_seed)
 
     # Load dataset and dataloader
-    testset = ATSDS(root=args.dataset_path, split=args.dataset_split, dataset_type=args.dataset_type, transform=TRANSFORM_TEST)
+    testset = ATSDS(root= BASE_DIR, split=dataset_split, dataset_type=dataset_type, transform=TRANSFORM_TEST)
 
     # Load model
-    model = get_model(args.model_name, n_classes=testset.get_num_classes()).to(device)
+    model = get_model(model_name, n_classes = testset.get_num_classes())
+    model = model.to(device)
     model.eval()
     optimizer = torch.optim.Adam(model.parameters())
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
     # Load checkpoint
-    epoch, trainstats = load_checkpoint(args.model_checkpoint, model, optimizer, scheduler, device)
+    epoch,trainstats = load_model(model, optimizer, scheduler, os.path.join(CHECKPOINT_PATH, model_cpt), device)
     print(f"Model checkpoint loaded. Epoch: {epoch}")
 
     # Prepare categories and images
-    categories, label_idx_dict, imagedict = prepare_categories_and_images(args.images_path)
+    categories, label_idx_dict, imagedict = prepare_categories_and_images(IMAGES_PATH)
 
     # Ensure output directories exist
-    output_path = args.output_path + args.model_name + "/xrai/test/"
     create_output_directories(output_path, categories)
 
     # Generate XRAI visualizations
     generate_xrai_visualizations(
         model, device, categories, imagedict, label_idx_dict,
-        output_path, args.images_path
+        output_path, IMAGES_PATH
     )
 
 
